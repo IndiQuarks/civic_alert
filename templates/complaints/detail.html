@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Complaint #{{ complaint.id }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>#detail-map { height: 220px; border-radius: 8px; }</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 780px">
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <a href="{{ url_for('complaints.dashboard') }}" class="btn-secondary-ca text-decoration-none" style="padding:.4rem .9rem;font-size:.85rem">
+        <i class="bi bi-arrow-left"></i> Back
+      </a>
+      {% if complaint.status in ('pending', 'acknowledged') and complaint.user_id == current_user.id %}
+      <a href="{{ url_for('complaints.edit', complaint_id=complaint.id) }}" class="btn-outline-ca text-decoration-none" style="padding:.4rem .9rem;font-size:.85rem">
+        <i class="bi bi-pencil"></i> Edit
+      </a>
+      {% endif %}
+      <h4 class="fw-bold mb-0 mt-1">{{ complaint.title }}</h4>
+      <p class="text-muted small">Complaint #{{ complaint.id }} &bull;
+        {{ complaint.created_at.strftime('%d %b %Y, %I:%M %p') }}</p>
+    </div>
+    <span class="status-pill bg-{{ complaint.status_badge_color }} text-white fs-6">
+      {{ complaint.status.replace('_', ' ') }}
+    </span>
+  </div>
+
+  <!-- ── Resolution proof & confirm/dispute (Feature 4) ──────────────────── -->
+  {% if complaint.status == 'resolved' and complaint.user_id == current_user.id %}
+    {% if complaint.resolution_confirmed is none %}
+    <div class="card border-success mb-4 shadow-sm">
+      <div class="card-header bg-success text-white fw-bold">
+        <i class="bi bi-check-circle me-2"></i>This complaint has been marked Resolved
+      </div>
+      <div class="card-body">
+        {% if complaint.resolution_proof_filename %}
+        <p class="mb-2"><strong>Official proof photo:</strong></p>
+        <img src="{{ url_for('static', filename='uploads/' + complaint.resolution_proof_filename) }}"
+             class="img-fluid rounded mb-3" style="max-height:240px" alt="Resolution proof">
+        {% endif %}
+        {% if complaint.admin_remarks %}
+        <p class="mb-3"><strong>Official note:</strong> {{ complaint.admin_remarks }}</p>
+        {% endif %}
+        <p class="mb-3 fw-semibold">Is this issue actually fixed?</p>
+        <form method="POST" action="{{ url_for('complaints.confirm_resolution', complaint_id=complaint.id) }}"
+              class="d-flex gap-2 flex-wrap">
+          <input type="hidden" name="action" id="resolution-action" value="">
+          <input type="hidden" name="reason" id="resolution-reason" value="">
+          <button type="button" class="btn-primary-ca px-4"
+                  onclick="submitResolution('confirm')">
+            <i class="bi bi-check-lg me-1"></i>Yes, It's Fixed!
+          </button>
+          <button type="button" class="btn-danger-ca px-4"
+                  onclick="showDisputeForm()">
+            <i class="bi bi-x-lg me-1"></i>No, Still a Problem
+          </button>
+        </form>
+        <div id="dispute-form" class="mt-3 d-none">
+          <label class="form-label">What's still wrong? (helps officials)</label>
+          <textarea id="dispute-reason-text" class="form-control mb-2" rows="2"
+                    placeholder="e.g. Pothole was partially filled but still dangerous"></textarea>
+          <form method="POST" action="{{ url_for('complaints.confirm_resolution', complaint_id=complaint.id) }}">
+            <input type="hidden" name="action" value="dispute">
+            <input type="hidden" name="reason" id="dispute-reason-hidden">
+            <button type="submit" class="btn-danger-ca btn-sm"
+                    onclick="document.getElementById('dispute-reason-hidden').value = document.getElementById('dispute-reason-text').value">
+              Submit Dispute
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% elif complaint.resolution_confirmed == true %}
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle-fill me-2"></i>
+      <strong>You confirmed this issue is fixed.</strong> Thank you for your feedback!
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <strong>You disputed this resolution.</strong> Officials have been notified.
+      {% if complaint.resolution_dispute_reason %}
+      <br><small>Your reason: {{ complaint.resolution_dispute_reason }}</small>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-md-8">
+      <div class="card p-4 mb-3">
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <span class="badge bg-light text-dark border"><i class="bi bi-tag me-1"></i>{{ complaint.category }}</span>
+          <span class="badge bg-{{ complaint.priority_badge_color }}"><i class="bi bi-flag me-1"></i>{{ complaint.priority }}</span>
+          <span class="badge bg-light text-dark border"><i class="bi bi-hand-thumbs-up me-1"></i>{{ complaint.upvotes }}</span>
+        </div>
+        <h6 class="text-muted">Description</h6>
+        <p>{{ complaint.description }}</p>
+        <h6 class="text-muted">Location</h6>
+        <p><i class="bi bi-geo-alt me-1"></i>{{ complaint.address }}
+          {% if complaint.ward %} — {{ complaint.ward }}{% endif %}</p>
+        {% if complaint.image_filename %}
+        <h6 class="text-muted">Photo</h6>
+        <img src="{{ url_for('static', filename='uploads/' + complaint.image_filename) }}"
+             class="img-fluid rounded" style="max-height:300px" alt="Issue photo">
+        {% endif %}
+      </div>
+      {% if complaint.admin_remarks %}
+      <div class="card p-3 border-warning mb-3">
+        <h6 class="text-warning"><i class="bi bi-chat-square-text me-1"></i>Official Remarks</h6>
+        <p class="mb-0">{{ complaint.admin_remarks }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="col-md-4">
+      {% if complaint.latitude and complaint.longitude %}
+      <div class="card p-3 mb-3">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-map me-1"></i>Location</h6>
+        <div id="detail-map"></div>
+      </div>
+      {% endif %}
+      {% if complaint.assignee %}
+      <div class="card p-3 mb-3">
+        <h6 class="fw-semibold"><i class="bi bi-person-check me-1 text-success"></i>Assigned To</h6>
+        <p class="mb-0">{{ complaint.assignee.name }}</p>
+      </div>
+      {% endif %}
+      <div class="card p-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-clock-history me-1"></i>Timeline</h6>
+        {% for h in complaint.status_history %}
+        <div class="d-flex gap-2 mb-3">
+          <div class="text-center" style="width:20px">
+            <i class="bi bi-circle-fill text-{{ 'success' if h.new_status == 'resolved' else 'primary' }}"
+               style="font-size:.5rem;margin-top:5px"></i>
+            {% if not loop.last %}
+            <div style="width:1px;height:24px;background:#dee2e6;margin:3px auto"></div>
+            {% endif %}
+          </div>
+          <div>
+            <span class="badge bg-secondary small">{{ h.new_status.replace('_',' ') }}</span>
+            <p class="text-muted small mb-0">{{ h.changed_at.strftime('%d %b, %I:%M %p') }}</p>
+            {% if h.note %}<p class="small mb-0">{{ h.note }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if complaint.latitude and complaint.longitude %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const m = L.map('detail-map').setView([{{ complaint.latitude }}, {{ complaint.longitude }}], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  L.marker([{{ complaint.latitude }}, {{ complaint.longitude }}]).addTo(m)
+    .bindPopup("{{ complaint.title }}").openPopup();
+</script>
+{% endif %}
+<script>
+  function submitResolution(action) {
+    const form = document.querySelector('form[action*="confirm-resolution"]');
+    document.getElementById('resolution-action').value = action;
+    form.submit();
+  }
+  function showDisputeForm() {
+    document.getElementById('dispute-form').classList.remove('d-none');
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-bar-chart me-2 text-primary"></i>Analytics</h4>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn-secondary-ca btn-sm">← Dashboard</a>
+  </div>
+
+  <!-- KPIs -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card text-center p-4">
+        <h2 class="fw-bold text-success">{{ resolved_count }}</h2>
+        <p class="text-muted mb-0">Total Resolved</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center p-4">
+        <h2 class="fw-bold text-info">{{ avg_hours }} hrs</h2>
+        <p class="text-muted mb-0">Avg. Resolution Time</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center p-4">
+        <h2 class="fw-bold text-primary">{{ by_ward|length }}</h2>
+        <p class="text-muted mb-0">Active Wards</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- By Category -->
+    <div class="col-md-6">
+      <div class="card p-4">
+        <h6 class="fw-semibold mb-3">Complaints by Category</h6>
+        {% for cat, count in by_category|sort(attribute='1', reverse=True) %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ cat }}</span><strong>{{ count }}</strong>
+          </div>
+          <div class="progress" style="height:8px">
+            <div class="progress-bar bg-primary"
+                 style="width:{{ (count / (by_category|map(attribute=1)|max)) * 100 }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- By Status -->
+    <div class="col-md-6">
+      <div class="card p-4">
+        <h6 class="fw-semibold mb-3">Complaints by Status</h6>
+        {% set status_colors = {'pending':'secondary','acknowledged':'info','in_progress':'warning','resolved':'success','rejected':'danger'} %}
+        {% for status, count in by_status %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="status-pill bg-{{ status_colors.get(status,'secondary') }} text-white">{{ status.replace('_',' ') }}</span>
+          <strong>{{ count }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- By Ward -->
+    <div class="col-12">
+      <div class="card p-4">
+        <h6 class="fw-semibold mb-3">Top 10 Wards by Complaint Count</h6>
+        <div class="row">
+          {% for ward, count in by_ward %}
+          <div class="col-md-6 mb-2">
+            <div class="d-flex justify-content-between small mb-1">
+              <span>{{ ward or 'Unknown' }}</span><strong>{{ count }}</strong>
+            </div>
+            <div class="progress" style="height:8px">
+              <div class="progress-bar bg-warning"
+                   style="width:{{ (count / (by_ward|map(attribute=1)|max)) * 100 }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSON API note -->
+  <div class="alert alert-info mt-4">
+    <i class="bi bi-code-slash me-2"></i>
+    <strong>JSON API available:</strong>
+    <code><a href="{{ url_for('admin.api_complaints') }}" class="text-dark">GET /admin/api/complaints</a></code>
+    — Returns all complaints as JSON for building a React/Vue frontend.
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}All Complaints{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold mb-0">All Complaints</h4>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn-secondary-ca btn-sm">← Dashboard</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-3 mb-3">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <input type="text" name="search" class="form-control form-control-sm"
+               placeholder="Search title/address..." value="{{ filters.search }}">
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          {% for s in valid_statuses %}
+          <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All Category</option>
+          {% for cat in categories %}
+          <option value="{{ cat }}" {% if filters.category == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="priority" class="form-select form-select-sm">
+          <option value="">All Priority</option>
+          {% for p in ['low','medium','high','urgent'] %}
+          <option value="{{ p }}" {% if filters.priority == p %}selected{% endif %}>{{ p.title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="ward" class="form-control form-control-sm"
+               placeholder="Ward..." value="{{ filters.ward }}">
+      </div>
+      <div class="col-md-1">
+        <button class="btn-primary-ca btn-sm w-100">Go</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle small">
+        <thead>
+          <tr><th>#</th><th>Title</th><th>Category</th><th>Priority</th><th>Ward</th><th>Reporter</th><th>Status</th><th>Date</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for c in complaints.items %}
+          <tr class="priority-{{ c.priority }}">
+            <td class="text-muted">#{{ c.id }}</td>
+            <td><strong>{{ c.title[:50] }}</strong></td>
+            <td>{{ c.category }}</td>
+            <td><span class="badge bg-{{ c.priority_badge_color }}">{{ c.priority }}</span></td>
+            <td>{{ c.ward or '—' }}</td>
+            <td>{{ c.reporter.name if c.reporter else '—' }}</td>
+            <td><span class="status-pill bg-{{ c.status_badge_color }} text-white">{{ c.status.replace('_',' ') }}</span></td>
+            <td>{{ c.created_at.strftime('%d %b %Y') }}</td>
+            <td><a href="{{ url_for('admin.complaint_detail', complaint_id=c.id) }}" class="btn btn-sm btn-outline-primary">Manage</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-4">No complaints found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Pagination -->
+    {% if complaints.pages > 1 %}
+    <div class="card-footer d-flex justify-content-center gap-1">
+      {% for page in complaints.iter_pages() %}
+        {% if page %}
+          <a href="{{ url_for('admin.complaints_list', page=page, **filters) }}"
+             class="btn btn-sm {{ 'btn-primary' if page == complaints.page else 'btn-outline-secondary' }}">{{ page }}</a>
+        {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled">…</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Verify Email{% endblock %}
+{% block content %}
+<div class="container py-5 d-flex justify-content-center">
+  <div style="width:100%;max-width:420px">
+    <div class="text-center mb-4">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+           style="width:60px;height:60px;background:var(--mint)">
+        <i class="bi bi-envelope-check-fill fs-3 text-ca"></i>
+      </div>
+      <h2 class="page-title mb-1">Verify Your Email</h2>
+      <p class="page-sub">
+        We sent a 6-digit OTP to <strong>{{ email }}</strong>.<br>
+        Enter it below to activate your account.
+      </p>
+    </div>
+
+    <div class="card p-4">
+      <form method="POST">
+        <label class="form-label text-center d-block">Enter 6-digit OTP</label>
+        <input type="text" name="otp" class="form-control text-center fw-bold mb-3"
+               maxlength="6" placeholder="— — — — — —"
+               autocomplete="one-time-code" autofocus
+               style="font-size:2rem;letter-spacing:10px;border-radius:12px">
+        <button class="btn-primary-ca w-100 justify-content-center" style="border-radius:10px;padding:.65rem">
+          <i class="bi bi-check-circle"></i> Verify OTP
+        </button>
+      </form>
+
+      <hr class="section-divider">
+
+      <form method="POST" action="{{ url_for('auth.resend_otp') }}">
+        <button class="btn-secondary-ca w-100 justify-content-center" style="border-radius:10px;padding:.55rem">
+          <i class="bi bi-arrow-clockwise me-1"></i> Resend OTP
+        </button>
+      </form>
+
+      <p class="text-center small mt-3" style="color:var(--text-light)">
+        OTP expires in 10 minutes. Check your spam folder if you don't see it.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

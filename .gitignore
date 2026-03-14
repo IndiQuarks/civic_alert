@@ -1,0 +1,26 @@
+# Secrets — never commit these
+.env
+
+# Virtual environment
+venv/
+.venv/
+
+# SQLite dev database
+instance/civic.db
+
+# Uploaded images
+static/uploads/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Flask-Migrate (keep migrations/ folder, but not __pycache__ inside it)
+migrations/__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
+start.sh
+.env

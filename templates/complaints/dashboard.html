@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard{% endblock %}
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h2 class="page-title mb-0">My Complaints</h2>
+      <p class="page-sub">Welcome back, <strong>{{ current_user.name }}</strong></p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('complaints.feed') }}" class="btn-secondary-ca text-decoration-none">
+        <i class="bi bi-broadcast"></i> Community Feed
+      </a>
+      <a href="{{ url_for('complaints.submit') }}" class="btn-primary-ca text-decoration-none">
+        <i class="bi bi-plus-lg"></i> New Complaint
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="row g-3 mb-4">
+    {% set cards = [
+      ('Total', stats.total,       'bi-list-task',       'var(--teal-deep)'),
+      ('Pending', stats.pending,   'bi-hourglass-split', 'var(--terra)'),
+      ('In Progress', stats.in_progress, 'bi-arrow-repeat', '#e67e22'),
+      ('Resolved', stats.resolved, 'bi-check-circle',   '#27ae60'),
+    ] %}
+    {% for label, val, icon, color in cards %}
+    <div class="col-6 col-md-3">
+      <div class="stat-card d-flex align-items-center justify-content-between" style="border-left:4px solid {{ color }}">
+        <div>
+          <div class="stat-num" style="color:{{ color }}">{{ val }}</div>
+          <div class="stat-label">{{ label }}</div>
+        </div>
+        <i class="bi {{ icon }} stat-icon" style="color:{{ color }}"></i>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Table -->
+  {% if complaints %}
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Issue</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in complaints %}
+          <tr class="priority-{{ c.priority }}">
+            <td class="small" style="color:var(--text-light)">#{{ c.id }}</td>
+            <td>
+              <div class="fw-600">{{ c.title }}</div>
+              <div class="small" style="color:var(--text-light)">{{ c.address[:55] }}{% if c.address|length > 55 %}…{% endif %}</div>
+            </td>
+            <td><span class="badge-ca">{{ c.category.split('/')[0].strip() }}</span></td>
+            <td><span class="status-pill sp-{{ c.priority }}" style="background:{% if c.priority=='urgent' %}#fde8e8;color:#c0392b{% elif c.priority=='high' %}#fdf0e8;color:var(--terra){% elif c.priority=='medium' %}#ddf0ee;color:var(--teal-deep){% else %}#e8f5ee;color:#27ae60{% endif %}">{{ c.priority }}</span></td>
+            <td><span class="status-pill sp-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+            <td class="small" style="color:var(--text-light)">{{ c.created_at.strftime('%d %b %Y') }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('complaints.detail', complaint_id=c.id) }}" class="btn-outline-ca text-decoration-none" style="padding:.3rem .7rem;font-size:.8rem">View</a>
+                {% if c.status in ('pending', 'acknowledged') %}
+                <a href="{{ url_for('complaints.edit', complaint_id=c.id) }}" class="btn-secondary-ca text-decoration-none" style="padding:.3rem .7rem;font-size:.8rem"><i class="bi bi-pencil"></i></a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card text-center py-5">
+    <i class="bi bi-inbox fs-1" style="color:var(--teal-soft)"></i>
+    <p class="mt-3" style="color:var(--text-mid)">You haven't submitted any complaints yet.</p>
+    <a href="{{ url_for('complaints.submit') }}" class="btn-primary-ca mx-auto text-decoration-none mt-2" style="width:fit-content">
+      <i class="bi bi-plus-lg"></i> Report Your First Issue
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

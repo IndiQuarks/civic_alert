@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Manage #{{ complaint.id }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>#admin-map { height: 200px; border-radius:8px; }</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ url_for('admin.complaints_list') }}" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>All Complaints</a>
+    <span class="text-muted">/</span>
+    <span class="text-muted small">#{{ complaint.id }}</span>
+  </div>
+
+  <div class="row g-4">
+    <!-- LEFT: Complaint details -->
+    <div class="col-lg-7">
+      <div class="card p-4 mb-3">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <h5 class="fw-bold mb-0">{{ complaint.title }}</h5>
+          <span class="status-pill bg-{{ complaint.status_badge_color }} text-white ms-2">{{ complaint.status.replace('_',' ') }}</span>
+        </div>
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <span class="badge bg-light text-dark border">{{ complaint.category }}</span>
+          <span class="badge bg-{{ complaint.priority_badge_color }}">{{ complaint.priority }}</span>
+          <span class="badge bg-light text-dark border"><i class="bi bi-hand-thumbs-up me-1"></i>{{ complaint.upvotes }} upvotes</span>
+          <span class="badge bg-light text-dark border"><i class="bi bi-person me-1"></i>{{ complaint.reporter.name if complaint.reporter else '—' }}</span>
+        </div>
+        <p>{{ complaint.description }}</p>
+        <p class="mb-1"><i class="bi bi-geo-alt me-1 text-danger"></i><strong>{{ complaint.address }}</strong></p>
+        {% if complaint.ward %}<p class="text-muted small">Ward: {{ complaint.ward }}</p>{% endif %}
+
+        {% if complaint.image_filename %}
+        <div class="mt-3">
+          <img src="{{ url_for('static', filename='uploads/' + complaint.image_filename) }}"
+               class="img-fluid rounded" style="max-height:300px" alt="Issue photo">
+        </div>
+        {% endif %}
+      </div>
+
+      {% if complaint.latitude and complaint.longitude %}
+      <div class="card p-3 mb-3">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-map me-1"></i>Map</h6>
+        <div id="admin-map"></div>
+      </div>
+      {% endif %}
+
+      <!-- Status History -->
+      <div class="card p-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-clock-history me-1"></i>Status Timeline</h6>
+        {% for h in complaint.status_history %}
+        <div class="d-flex gap-3 mb-3">
+          <div class="text-center pt-1" style="min-width:14px">
+            <i class="bi bi-circle-fill text-{{ 'success' if h.new_status == 'resolved' else 'primary' }}" style="font-size:.45rem"></i>
+          </div>
+          <div>
+            <span class="badge bg-secondary">{{ h.new_status.replace('_',' ') }}</span>
+            <span class="text-muted small ms-2">{{ h.changed_at.strftime('%d %b %Y, %I:%M %p') }}</span>
+            {% if h.changer %}<span class="text-muted small ms-1">by {{ h.changer.name }}</span>{% endif %}
+            {% if h.note %}<p class="small mb-0 mt-1">{{ h.note }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- RIGHT: Action panel -->
+    <div class="col-lg-5">
+      <!-- Update Status -->
+      <div class="card p-4 mb-3 border-primary">
+        <h6 class="fw-bold mb-3"><i class="bi bi-arrow-repeat me-1 text-primary"></i>Update Status</h6>
+        <form method="POST" action="{{ url_for('admin.update_status', complaint_id=complaint.id) }}">
+          <div class="mb-2">
+            <label class="form-label small">New Status</label>
+            <select name="status" class="form-select form-select-sm" required>
+              {% for s in valid_statuses %}
+              <option value="{{ s }}" {% if complaint.status == s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Note (optional)</label>
+            <input type="text" name="note" class="form-control form-control-sm" placeholder="Short note about this update">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Official Remarks (visible to citizen)</label>
+            <textarea name="admin_remarks" class="form-control form-control-sm" rows="2"
+                      placeholder="e.g. Team dispatched, expected fix by Friday">{{ complaint.admin_remarks or '' }}</textarea>
+          </div>
+          <button class="btn-primary-ca btn-sm w-100">Update Status</button>
+        </form>
+      </div>
+
+      <!-- Assign -->
+      <div class="card p-4 mb-3 border-success">
+        <h6 class="fw-bold mb-3"><i class="bi bi-person-check me-1 text-success"></i>Assign to Official</h6>
+        <form method="POST" action="{{ url_for('admin.assign', complaint_id=complaint.id) }}">
+          <div class="mb-3">
+            <select name="official_id" class="form-select form-select-sm" required>
+              <option value="">-- Select Official --</option>
+              {% for u in officials %}
+              <option value="{{ u.id }}" {% if complaint.assigned_to == u.id %}selected{% endif %}>
+                {{ u.name }} ({{ u.role }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn-primary-ca btn-sm w-100">Assign</button>
+        </form>
+        {% if complaint.assignee %}
+        <p class="text-muted small mt-2 mb-0">Currently: <strong>{{ complaint.assignee.name }}</strong></p>
+        {% endif %}
+      </div>
+
+      <!-- Resolution Proof Upload (Feature 4) -->
+      <div class="card p-4 mb-3 border-info">
+        <h6 class="fw-bold mb-2"><i class="bi bi-camera-fill me-1 text-info"></i>Resolution Proof</h6>
+        {% if complaint.resolution_proof_filename %}
+        <img src="{{ url_for('static', filename='uploads/' + complaint.resolution_proof_filename) }}"
+             class="img-fluid rounded mb-2" style="max-height:180px" alt="Proof">
+        {% if complaint.resolution_confirmed is not none %}
+          {% if complaint.resolution_confirmed %}
+          <div class="alert alert-success py-1 small mb-2">
+            <i class="bi bi-check-circle-fill me-1"></i>Citizen confirmed resolution
+          </div>
+          {% else %}
+          <div class="alert alert-danger py-1 small mb-2">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>Citizen disputed: {{ complaint.resolution_dispute_reason or 'No reason given' }}
+          </div>
+          {% endif %}
+        {% else %}
+        <p class="text-muted small mb-2">Awaiting citizen confirmation...</p>
+        {% endif %}
+        {% endif %}
+        <form method="POST"
+              action="{{ url_for('admin.upload_resolution_proof', complaint_id=complaint.id) }}"
+              enctype="multipart/form-data">
+          <label class="form-label small">{{ 'Update' if complaint.resolution_proof_filename else 'Upload' }} proof photo</label>
+          <input type="file" name="proof_image" class="form-control form-control-sm mb-2"
+                 accept="image/*" required>
+          <button class="btn btn-info btn-sm text-white w-100">
+            <i class="bi bi-upload me-1"></i>Upload & Mark Resolved
+          </button>
+        </form>
+      </div>
+
+      <!-- Metadata -->
+      <div class="card p-3">
+        <h6 class="fw-semibold mb-3">Details</h6>
+        <table class="table table-sm table-borderless small mb-0">
+          <tr><td class="text-muted">ID</td><td>#{{ complaint.id }}</td></tr>
+          <tr><td class="text-muted">Reporter</td><td>{{ complaint.reporter.name if complaint.reporter else '—' }}</td></tr>
+          <tr><td class="text-muted">Submitted</td><td>{{ complaint.created_at.strftime('%d %b %Y, %I:%M %p') }}</td></tr>
+          {% if complaint.resolved_at %}
+          <tr><td class="text-muted">Resolved</td><td>{{ complaint.resolved_at.strftime('%d %b %Y') }}</td></tr>
+          {% endif %}
+          <tr><td class="text-muted">Upvotes</td><td>{{ complaint.upvotes }}</td></tr>
+          <tr><td class="text-muted">Citizen Verified</td><td>
+            {% if complaint.resolution_confirmed is none %}—
+            {% elif complaint.resolution_confirmed %}<span class="text-success fw-bold">Confirmed ✓</span>
+            {% else %}<span class="text-danger fw-bold">Disputed ✗</span>{% endif %}
+          </td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if complaint.latitude and complaint.longitude %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const m = L.map('admin-map').setView([{{ complaint.latitude }}, {{ complaint.longitude }}], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  L.marker([{{ complaint.latitude }}, {{ complaint.longitude }}]).addTo(m);
+</script>
+{% endif %}
+{% endblock %}

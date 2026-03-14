@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Create Account{% endblock %}
+{% block content %}
+<div class="container py-5 d-flex justify-content-center">
+  <div style="width:100%;max-width:520px">
+    <div class="text-center mb-4">
+      <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+           style="width:60px;height:60px;background:var(--mint)">
+        <i class="bi bi-person-plus-fill fs-3 text-ca"></i>
+      </div>
+      <h2 class="page-title mb-1">Create account</h2>
+      <p class="page-sub">Join CivicAlert and start reporting issues in your area</p>
+    </div>
+    <div class="card p-4">
+      <form method="POST" id="regForm" novalidate>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Full Name *</label>
+            <input type="text" name="name" class="form-control" value="{{ name or '' }}" required autofocus placeholder="Your full name">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email address *</label>
+            <input type="email" name="email" class="form-control" value="{{ email or '' }}" required placeholder="you@example.com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">
+              Mobile Number
+              <span class="text-muted fw-normal">(10 digits)</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text" style="background:var(--mint);border-color:var(--border);font-size:.85rem;font-weight:600;color:var(--teal-deep)">+91</span>
+              <input type="tel" name="phone" id="phoneInput" class="form-control"
+                     value="{{ phone or '' }}"
+                     placeholder="9876543210"
+                     maxlength="10"
+                     pattern="[6-9][0-9]{9}"
+                     title="Enter a valid 10-digit Indian mobile number"
+                     style="border-left:none">
+            </div>
+            <div class="invalid-feedback" id="phoneError">Enter a valid 10-digit mobile number starting with 6-9.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Ward / Area</label>
+            <input type="text" name="ward" class="form-control" value="{{ ward or '' }}" placeholder="e.g. Ward 12, Koramangala">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password *</label>
+            <input type="password" name="password" class="form-control" required minlength="6" placeholder="Min. 6 characters">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm Password *</label>
+            <input type="password" name="confirm_password" id="confirmPw" class="form-control" required placeholder="Repeat password">
+            <div class="invalid-feedback">Passwords do not match.</div>
+          </div>
+          <div class="col-12 mt-2">
+            <button type="submit" class="btn-primary-ca w-100 justify-content-center" style="border-radius:10px;padding:.65rem">
+              <i class="bi bi-person-check"></i> Create Account
+            </button>
+          </div>
+        </div>
+      </form>
+      <hr class="section-divider">
+      <p class="text-center small mb-0" style="color:var(--text-mid)">
+        Already have an account? <a href="{{ url_for('auth.login') }}" class="fw-600">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('regForm').addEventListener('submit', function(e) {
+  let ok = true;
+
+  // Phone validation: exactly 10 digits, starts with 6-9
+  const phone = document.getElementById('phoneInput');
+  const phoneErr = document.getElementById('phoneError');
+  if (phone.value.trim() !== '') {
+    const valid = /^[6-9][0-9]{9}$/.test(phone.value.trim());
+    if (!valid) {
+      phone.classList.add('is-invalid');
+      ok = false;
+    } else {
+      phone.classList.remove('is-invalid');
+    }
+  }
+
+  // Password match
+  const pw = document.querySelector('input[name=password]');
+  const cpw = document.getElementById('confirmPw');
+  if (pw.value !== cpw.value) {
+    cpw.classList.add('is-invalid');
+    ok = false;
+  } else {
+    cpw.classList.remove('is-invalid');
+  }
+
+  if (!ok) e.preventDefault();
+});
+
+// Strip non-digits as user types phone
+document.getElementById('phoneInput').addEventListener('input', function() {
+  this.value = this.value.replace(/\D/g, '').slice(0, 10);
+});
+</script>
+{% endblock %}

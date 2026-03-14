@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Edit Complaint #{{ complaint.id }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>#map { height: 260px; border-radius: 10px; }</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width:720px">
+  <div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{{ url_for('complaints.detail', complaint_id=complaint.id) }}" class="btn-secondary-ca text-decoration-none" style="padding:.4rem .9rem;font-size:.85rem">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <div>
+      <h2 class="page-title mb-0">Edit Complaint <span style="color:var(--teal-soft)">#{{ complaint.id }}</span></h2>
+      <p class="page-sub">You can edit while status is <em>pending</em> or <em>acknowledged</em>.</p>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <form method="POST" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label">Issue Title *</label>
+        <input type="text" name="title" class="form-control" maxlength="200"
+               value="{{ complaint.title }}" required>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Category *</label>
+          <select name="category" class="form-select" required>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if complaint.category == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Priority</label>
+          <select name="priority" class="form-select">
+            {% for p in priorities %}
+            <option value="{{ p }}" {% if complaint.priority == p %}selected{% endif %}>{{ p.capitalize() }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Description *</label>
+        <textarea name="description" class="form-control" rows="5" required>{{ complaint.description }}</textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Address *</label>
+        <input type="text" name="address" class="form-control" value="{{ complaint.address }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Ward / Area</label>
+        <input type="text" name="ward" class="form-control" value="{{ complaint.ward or '' }}">
+      </div>
+
+      <!-- Pincode lookup -->
+      <div class="mb-3">
+        <label class="form-label">Pincode Lookup <small class="fw-normal text-muted">(auto-fill area from pincode)</small></label>
+        <div class="input-group">
+          <input type="text" id="pincodeInput" class="form-control" maxlength="6" placeholder="Enter 6-digit pincode">
+          <button type="button" class="btn-primary-ca" style="border-radius:0 10px 10px 0;padding:.5rem 1rem" onclick="lookupPincode()">
+            <i class="bi bi-search"></i> Lookup
+          </button>
+        </div>
+        <div id="pincode-result" class="mt-2"></div>
+      </div>
+
+      <!-- Map -->
+      <div class="mb-3">
+        <label class="form-label">Location on Map <small class="fw-normal text-muted">(click to update pin)</small></label>
+        <div id="map" class="mb-2"></div>
+        <input type="hidden" name="latitude"  id="latitude"  value="{{ complaint.latitude or '' }}">
+        <input type="hidden" name="longitude" id="longitude" value="{{ complaint.longitude or '' }}">
+        <small class="text-muted" id="coords-display">
+          {% if complaint.latitude %}📍 Lat: {{ complaint.latitude }}, Lng: {{ complaint.longitude }}{% else %}No pin set.{% endif %}
+        </small>
+      </div>
+
+      <!-- Replace photo -->
+      <div class="mb-4">
+        <label class="form-label">Replace Photo <small class="fw-normal text-muted">(leave empty to keep current)</small></label>
+        {% if complaint.image_filename %}
+        <div class="mb-2">
+          <img src="{{ url_for('static', filename='uploads/' + complaint.image_filename) }}"
+               class="rounded" style="max-height:120px;border:1px solid var(--border)" alt="Current photo">
+          <p class="text-muted small mt-1">Current photo</p>
+        </div>
+        {% endif %}
+        <input type="file" name="image" class="form-control" accept="image/*" id="imageInput">
+        <div id="imagePreview" class="mt-2"></div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn-primary-ca">
+          <i class="bi bi-check2-circle"></i> Save Changes
+        </button>
+        <a href="{{ url_for('complaints.detail', complaint_id=complaint.id) }}" class="btn-secondary-ca text-decoration-none">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const initLat = {{ complaint.latitude or 20.5937 }};
+  const initLng = {{ complaint.longitude or 78.9629 }};
+  const initZoom = {{ 14 if complaint.latitude else 5 }};
+  const map = L.map('map').setView([initLat, initLng], initZoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+  let marker = {% if complaint.latitude %}L.marker([{{ complaint.latitude }}, {{ complaint.longitude }}]).addTo(map){% else %}null{% endif %};
+
+  map.on('click', ({latlng}) => {
+    document.getElementById('latitude').value  = latlng.lat.toFixed(6);
+    document.getElementById('longitude').value = latlng.lng.toFixed(6);
+    document.getElementById('coords-display').textContent = `📍 Lat: ${latlng.lat.toFixed(5)}, Lng: ${latlng.lng.toFixed(5)}`;
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([latlng.lat, latlng.lng]).addTo(map);
+  });
+
+  // Image preview
+  document.getElementById('imageInput').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('imagePreview').innerHTML =
+          `<img src="${e.target.result}" class="rounded" style="max-height:140px;border:1px solid var(--border)">`;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Pincode lookup
+  function lookupPincode() {
+    const pin = document.getElementById('pincodeInput').value.trim();
+    if (!/^\d{6}$/.test(pin)) {
+      document.getElementById('pincode-result').innerHTML =
+        '<span class="text-danger small"><i class="bi bi-x-circle me-1"></i>Enter a valid 6-digit pincode.</span>';
+      return;
+    }
+    document.getElementById('pincode-result').innerHTML =
+      '<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Looking up...</span>';
+    fetch(`https://api.postalpincode.in/pincode/${pin}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data[0].Status === 'Success' && data[0].PostOffice.length > 0) {
+          const po = data[0].PostOffice[0];
+          const ward = document.querySelector('input[name=ward]');
+          const addr = document.querySelector('input[name=address]');
+          ward.value = `${po.Name}, ${po.District}`;
+          if (!addr.value) addr.value = `${po.Name}, ${po.District}, ${po.State} – ${pin}`;
+          // Pan map to district (approx via Nominatim)
+          fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(po.District+','+po.State+',India')}&format=json&limit=1`)
+            .then(r => r.json()).then(geo => {
+              if (geo.length > 0) {
+                map.setView([geo[0].lat, geo[0].lon], 12);
+              }
+            });
+          document.getElementById('pincode-result').innerHTML =
+            `<div class="alert alert-success py-2 small mt-1">
+               <i class="bi bi-check-circle me-1"></i>
+               <strong>${po.Name}</strong> — ${po.District}, ${po.State} (${po.Pincode})
+             </div>`;
+        } else {
+          document.getElementById('pincode-result').innerHTML =
+            '<span class="text-danger small"><i class="bi bi-x-circle me-1"></i>Pincode not found. Try again.</span>';
+        }
+      })
+      .catch(() => {
+        document.getElementById('pincode-result').innerHTML =
+          '<span class="text-danger small"><i class="bi bi-x-circle me-1"></i>Lookup failed. Check your internet connection.</span>';
+      });
+  }
+  document.getElementById('pincodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookupPincode(); } });
+</script>
+{% endblock %}

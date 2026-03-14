@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}Report an Issue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  #map { height: 280px; border-radius: 10px; }
+  .meta-chip { display:inline-flex;align-items:center;gap:.35rem;background:var(--mint);color:var(--teal-deep);border-radius:20px;padding:.3rem .75rem;font-size:.8rem;font-weight:600;margin:.2rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width:740px">
+  <div class="mb-4">
+    <h2 class="page-title mb-1"><i class="bi bi-megaphone-fill me-2" style="color:var(--terra)"></i>Report a Civic Issue</h2>
+    <p class="page-sub">Fill in the details. The more specific you are, the faster it gets resolved.</p>
+  </div>
+
+  <!-- Duplicate warning (server-side) -->
+  {% if show_duplicate_warning and duplicates %}
+  <div class="card mb-4" style="border:2px solid var(--terra)">
+    <div class="card-header" style="background:var(--terra);color:#fff">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      Similar Issues Already Open ({{ duplicates|length }})
+    </div>
+    <div class="card-body">
+      <p class="mb-3" style="color:var(--text-mid)">Before submitting a new complaint, consider upvoting one of these — it signals urgency to officials.</p>
+      <div class="list-group mb-3">
+        {% for d in duplicates %}
+        <div class="list-group-item d-flex justify-content-between align-items-center" style="border-radius:10px;margin-bottom:.4rem;border:1px solid var(--border)">
+          <div>
+            <div class="fw-600">#{{ d.id }} — {{ d.title }}</div>
+            <small style="color:var(--text-light)">{{ d.address }} · {{ d.created }}</small>
+          </div>
+          <div class="d-flex gap-2 align-items-center ms-3 flex-shrink-0">
+            <span class="badge-ca"><i class="bi bi-hand-thumbs-up me-1"></i>{{ d.upvotes }}</span>
+            <a href="{{ url_for('complaints.detail', complaint_id=d.id) }}" target="_blank" class="btn-outline-ca text-decoration-none" style="padding:.3rem .75rem;font-size:.82rem">View & Upvote</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <form method="POST" enctype="multipart/form-data">
+          {% for key, val in form.items() %}{% if key != 'force_submit' %}
+          <input type="hidden" name="{{ key }}" value="{{ val }}">{% endif %}{% endfor %}
+          <input type="hidden" name="force_submit" value="1">
+          <button class="btn-primary-ca" style="background:var(--terra)"><i class="bi bi-send me-1"></i>Submit Anyway</button>
+        </form>
+        <a href="{{ url_for('complaints.submit') }}" class="btn-secondary-ca text-decoration-none">← Edit My Report</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Live duplicate banner -->
+  <div id="duplicate-banner" class="alert alert-warning d-none mb-3" style="border-left:4px solid var(--terra)">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    <strong id="dup-count">0</strong> similar open complaint(s) found in your ward this week.
+    <a href="#" id="dup-link" class="fw-600" style="color:var(--terra)">Review before submitting →</a>
+  </div>
+
+  <div class="card p-4">
+    <form method="POST" enctype="multipart/form-data" id="complaint-form">
+      <input type="hidden" name="force_submit" value="0">
+
+      <!-- Title -->
+      <div class="mb-3">
+        <label class="form-label">Issue Title *</label>
+        <input type="text" name="title" class="form-control" maxlength="200"
+               value="{{ form.title or '' }}" placeholder="e.g. Large pothole near bus stop on MG Road" required>
+      </div>
+
+      <!-- Category + Priority -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Category *</label>
+          <select name="category" class="form-select" id="category-select" required>
+            <option value="">— Select category —</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if form.category == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Priority</label>
+          <select name="priority" class="form-select">
+            {% for p in priorities %}
+            <option value="{{ p }}" {% if (form.priority or 'medium') == p %}selected{% endif %}>{{ p.capitalize() }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="mb-3">
+        <label class="form-label">Description *</label>
+        <textarea name="description" class="form-control" rows="4" maxlength="2000"
+                  placeholder="What is the issue? How serious is it? How long has it existed?" required>{{ form.description or '' }}</textarea>
+      </div>
+
+      <!-- Address -->
+      <div class="mb-3">
+        <label class="form-label">Street Address *</label>
+        <input type="text" name="address" id="address" class="form-control"
+               value="{{ form.address or '' }}" placeholder="House/building number, street name, landmark" required>
+      </div>
+
+      <!-- Ward + Pincode -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Ward / Area</label>
+          <input type="text" name="ward" class="form-control" id="ward-input"
+                 value="{{ form.ward or current_user.ward or '' }}" placeholder="e.g. Ward 7, Koramangala">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Pincode Lookup <small class="fw-normal" style="color:var(--text-light)">(auto-fills area)</small></label>
+          <div class="input-group">
+            <input type="text" id="pincodeInput" class="form-control" maxlength="6" placeholder="6-digit pincode">
+            <button type="button" onclick="lookupPincode()"
+                    style="background:var(--teal-deep);color:#fff;border:none;padding:.5rem 1rem;border-radius:0 10px 10px 0;font-weight:600;cursor:pointer">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
+          <div id="pincode-result" class="mt-1"></div>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="mb-3">
+        <label class="form-label">Pin on Map <small class="fw-normal" style="color:var(--text-light)">(click to drop pin, or use pincode lookup)</small></label>
+        <div id="map" class="mb-2"></div>
+        <input type="hidden" name="latitude" id="latitude">
+        <input type="hidden" name="longitude" id="longitude">
+        <small style="color:var(--text-light)" id="coords-display">No pin dropped yet. Click the map or use pincode lookup.</small>
+      </div>
+
+      <!-- Photo upload with EXIF extraction -->
+      <div class="mb-4">
+        <label class="form-label">Photo <small class="fw-normal" style="color:var(--text-light)">(optional · max 5MB · GPS & date auto-extracted)</small></label>
+        <input type="file" name="image" class="form-control" accept="image/*" id="imageInput">
+
+        <!-- EXIF metadata display -->
+        <div id="exif-panel" class="d-none mt-3 p-3 rounded" style="background:var(--mint);border:1px solid var(--border)">
+          <p class="mb-2 fw-600 small" style="color:var(--teal-deep)">
+            <i class="bi bi-camera me-1"></i> Photo Metadata Extracted
+          </p>
+          <div id="exif-chips" class="d-flex flex-wrap"></div>
+        </div>
+
+        <div id="imagePreview" class="mt-2"></div>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn-primary-ca">
+          <i class="bi bi-send-fill"></i> Submit Complaint
+        </button>
+        <a href="{{ url_for('complaints.dashboard') }}" class="btn-secondary-ca text-decoration-none">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Map setup ──────────────────────────────────────────────────────────────
+const map = L.map('map').setView([20.5937, 78.9629], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+let marker = null;
+map.on('click', ({latlng}) => {
+  setPin(latlng.lat, latlng.lng);
+});
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 14));
+}
+function setPin(lat, lng, zoom) {
+  document.getElementById('latitude').value  = parseFloat(lat).toFixed(6);
+  document.getElementById('longitude').value = parseFloat(lng).toFixed(6);
+  document.getElementById('coords-display').textContent = `📍 Lat: ${parseFloat(lat).toFixed(5)}, Lng: ${parseFloat(lng).toFixed(5)}`;
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lng]).addTo(map);
+  if (zoom) map.setView([lat, lng], zoom);
+}
+
+// ── Pincode lookup ─────────────────────────────────────────────────────────
+function lookupPincode() {
+  const pin = document.getElementById('pincodeInput').value.trim();
+  if (!/^\d{6}$/.test(pin)) {
+    document.getElementById('pincode-result').innerHTML =
+      '<span class="text-danger small"><i class="bi bi-x-circle me-1"></i>Enter a valid 6-digit pincode.</span>';
+    return;
+  }
+  document.getElementById('pincode-result').innerHTML =
+    '<span class="small" style="color:var(--text-light)"><i class="bi bi-hourglass-split me-1"></i>Looking up…</span>';
+
+  fetch(`https://api.postalpincode.in/pincode/${pin}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data[0].Status === 'Success' && data[0].PostOffice.length > 0) {
+        const po = data[0].PostOffice[0];
+        document.getElementById('ward-input').value = `${po.Name}, ${po.District}`;
+        const addrField = document.getElementById('address');
+        if (!addrField.value) addrField.value = `${po.Name}, ${po.District}, ${po.State} – ${pin}`;
+        document.getElementById('pincode-result').innerHTML =
+          `<div class="alert alert-success py-2 small mt-1">
+             <i class="bi bi-check-circle me-1"></i>
+             <strong>${po.Name}</strong> · ${po.District}, ${po.State}
+           </div>`;
+        // Pan map
+        fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(po.District+','+po.State+',India')}&format=json&limit=1`)
+          .then(r => r.json()).then(geo => { if (geo[0]) map.setView([geo[0].lat, geo[0].lon], 12); });
+      } else {
+        document.getElementById('pincode-result').innerHTML =
+          '<span class="text-danger small"><i class="bi bi-x-circle me-1"></i>Pincode not found.</span>';
+      }
+    }).catch(() => {
+      document.getElementById('pincode-result').innerHTML =
+        '<span class="text-danger small"><i class="bi bi-wifi-off me-1"></i>Lookup failed.</span>';
+    });
+}
+document.getElementById('pincodeInput').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();lookupPincode();}});
+
+// ── EXIF metadata extractor ────────────────────────────────────────────────
+// Reads GPS, DateTime, Camera info directly from JPEG binary
+document.getElementById('imageInput').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+
+  // Image preview
+  const reader1 = new FileReader();
+  reader1.onload = e => {
+    document.getElementById('imagePreview').innerHTML =
+      `<img src="${e.target.result}" class="rounded mt-2" style="max-height:180px;border:1px solid var(--border)">`;
+  };
+  reader1.readAsDataURL(file);
+
+  // EXIF reading
+  const reader2 = new FileReader();
+  reader2.onload = function(e) {
+    try {
+      const exif = extractEXIF(e.target.result);
+      if (Object.keys(exif).length > 0) {
+        const chips = document.getElementById('exif-chips');
+        chips.innerHTML = '';
+        const add = (icon, label, val) => {
+          if (!val) return;
+          chips.innerHTML += `<div class="meta-chip"><i class="bi bi-${icon}"></i><span>${label}:</span> <strong>${val}</strong></div>`;
+        };
+        add('calendar3',    'Date',       exif.datetime);
+        add('camera',       'Camera',     exif.camera);
+        add('geo-alt-fill', 'GPS Lat',    exif.gps_lat ? exif.gps_lat.toFixed(5) : null);
+        add('geo-alt-fill', 'GPS Lng',    exif.gps_lng ? exif.gps_lng.toFixed(5) : null);
+        add('aspect-ratio', 'Resolution', exif.resolution);
+        document.getElementById('exif-panel').classList.remove('d-none');
+        // Auto-pin map if GPS found
+        if (exif.gps_lat && exif.gps_lng) {
+          setPin(exif.gps_lat, exif.gps_lng, 16);
+          chips.innerHTML += `<div class="meta-chip" style="background:#d4edda;color:#1a5c35"><i class="bi bi-pin-map-fill"></i> Map auto-pinned from photo GPS</div>`;
+        }
+      }
+    } catch(err) { /* no EXIF, silently skip */ }
+  };
+  reader2.readAsArrayBuffer(file);
+});
+
+function extractEXIF(buffer) {
+  const view = new DataView(buffer);
+  const result = {};
+  if (view.getUint16(0) !== 0xFFD8) return result; // not JPEG
+
+  let offset = 2;
+  while (offset < view.byteLength - 2) {
+    const marker = view.getUint16(offset);
+    if (marker === 0xFFE1) { // APP1 = EXIF
+      const exifOffset = offset + 4;
+      const header = String.fromCharCode(...new Uint8Array(buffer, exifOffset, 4));
+      if (header === 'Exif') {
+        const tiffOffset = exifOffset + 6;
+        const littleEndian = view.getUint16(tiffOffset) === 0x4949;
+        const readU16 = o => view.getUint16(tiffOffset + o, littleEndian);
+        const readU32 = o => view.getUint32(tiffOffset + o, littleEndian);
+        const readStr = (o, len) => { let s=''; for(let i=0;i<len&&view.getUint8(tiffOffset+o+i);i++) s+=String.fromCharCode(view.getUint8(tiffOffset+o+i)); return s.trim(); };
+
+        const ifdOffset = readU32(4);
+        const entries = readU16(ifdOffset);
+        for (let i = 0; i < entries; i++) {
+          const base = ifdOffset + 2 + i * 12;
+          const tag  = readU16(base);
+          const type = readU16(base + 2);
+          const cnt  = readU32(base + 4);
+          const valOff = base + 8;
+          if (tag === 0x010F) result.camera = readStr(readU32(valOff), cnt);        // Make
+          if (tag === 0x0132) result.datetime = readStr(readU32(valOff), cnt);      // DateTime
+          if (tag === 0xA002) result.width  = readU32(valOff) || readU16(valOff);   // PixelX
+          if (tag === 0xA003) result.height = readU32(valOff) || readU16(valOff);   // PixelY
+        }
+        if (result.width && result.height) result.resolution = `${result.width}×${result.height}`;
+
+        // GPS IFD — scan for GPS tag (0x8825) in IFD0
+        for (let i = 0; i < entries; i++) {
+          const base = ifdOffset + 2 + i * 12;
+          if (readU16(base) === 0x8825) {
+            const gpsBase = readU32(base + 8);
+            const gpsCount = readU16(gpsBase);
+            const getRat = off => { const n=readU32(off); const d=readU32(off+4); return d?n/d:0; };
+            let latRef='N', lngRef='E', lat=null, lng=null;
+            for (let j = 0; j < gpsCount; j++) {
+              const gb = gpsBase + 2 + j * 12;
+              const gt = readU16(gb);
+              const gvo = readU32(gb + 8);
+              if (gt === 1) latRef = String.fromCharCode(view.getUint8(tiffOffset+gvo));
+              if (gt === 3) lngRef = String.fromCharCode(view.getUint8(tiffOffset+gvo));
+              if (gt === 2) lat = getRat(tiffOffset+gvo) + getRat(tiffOffset+gvo+8)/60 + getRat(tiffOffset+gvo+16)/3600;
+              if (gt === 4) lng = getRat(tiffOffset+gvo) + getRat(tiffOffset+gvo+8)/60 + getRat(tiffOffset+gvo+16)/3600;
+            }
+            if (lat) result.gps_lat = latRef==='S' ? -lat : lat;
+            if (lng) result.gps_lng = lngRef==='W' ? -lng : lng;
+          }
+        }
+      }
+      break;
+    }
+    const len = view.getUint16(offset + 2);
+    offset += 2 + len;
+  }
+  return result;
+}
+
+// ── Live duplicate check ───────────────────────────────────────────────────
+let dupTO;
+function checkDups() {
+  const cat  = document.getElementById('category-select').value;
+  const ward = document.getElementById('ward-input').value;
+  if (!cat) return;
+  fetch(`/check-duplicates?category=${encodeURIComponent(cat)}&ward=${encodeURIComponent(ward)}`)
+    .then(r => r.json()).then(data => {
+      const banner = document.getElementById('duplicate-banner');
+      if (data.length > 0) {
+        document.getElementById('dup-count').textContent = data.length;
+        banner.classList.remove('d-none');
+      } else { banner.classList.add('d-none'); }
+    });
+}
+document.getElementById('category-select').addEventListener('change',()=>{clearTimeout(dupTO);dupTO=setTimeout(checkDups,400);});
+document.getElementById('ward-input').addEventListener('input',()=>{clearTimeout(dupTO);dupTO=setTimeout(checkDups,700);});
+</script>
+{% endblock %}

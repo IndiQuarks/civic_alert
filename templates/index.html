@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}CivicAlert – Report. Track. Resolve.{% endblock %}
+{% block extra_css %}
+<style>
+.hero { background: linear-gradient(135deg, var(--teal-deep) 0%, var(--teal-soft) 100%); color:#fff; padding: 5rem 0 4rem; }
+.hero h1 { font-family:'Fraunces',serif; font-size:3rem; line-height:1.15; }
+.hero p { font-size:1.1rem; opacity:.88; max-width:520px; }
+.feature-card { border-radius:16px; padding:1.5rem; border:1px solid var(--border); background:#fff; transition:transform .2s,box-shadow .2s; height:100%; }
+.feature-card:hover { transform:translateY(-4px); box-shadow:var(--shadow-lg); }
+.feature-icon { width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1rem; }
+.step-num { width:36px;height:36px;background:var(--teal-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex-shrink:0; }
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6">
+        <div class="d-inline-flex align-items-center gap-2 mb-3 px-3 py-1 rounded-pill" style="background:rgba(255,255,255,.15);font-size:.82rem;font-weight:600">
+          <i class="bi bi-award-fill" style="color:var(--mint)"></i> SIH 2025 · Problem #SIH25031
+        </div>
+        <h1 class="mb-3">Report Civic Issues.<br><em>Get Them Fixed.</em></h1>
+        <p class="mb-4">CivicAlert connects citizens directly with local government officials. Report potholes, garbage, streetlights and more — then track the resolution in real time.</p>
+        <div class="d-flex gap-3 flex-wrap">
+          <a href="{{ url_for('auth.register') }}" class="btn-primary-ca text-decoration-none" style="background:#fff;color:var(--teal-deep);font-size:1rem;padding:.75rem 2rem">
+            <i class="bi bi-person-plus"></i> Get Started Free
+          </a>
+          <a href="{{ url_for('auth.login') }}" class="nav-pill text-decoration-none" style="font-size:1rem;padding:.7rem 1.8rem;border-color:rgba(255,255,255,.5)">Sign In</a>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="row g-3">
+          {% set stats = [('1,200+','Complaints Resolved'),('48','Average Hours to Fix'),('92%','Citizen Satisfaction'),('50+','Wards Covered')] %}
+          {% for val, label in stats %}
+          <div class="col-6">
+            <div class="p-3 rounded-3 text-center" style="background:rgba(255,255,255,.12)">
+              <div style="font-family:'Fraunces',serif;font-size:2rem;font-weight:600">{{ val }}</div>
+              <div style="font-size:.82rem;opacity:.8">{{ label }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="py-5 bg-white">
+  <div class="container">
+    <div class="text-center mb-5">
+      <h2 class="page-title">How It Works</h2>
+      <p class="page-sub">Three simple steps to get your civic issue resolved</p>
+    </div>
+    <div class="row g-4 justify-content-center">
+      {% set steps = [
+        ('1','bi-camera','Submit a Report','Take a photo, drop a pin on the map, describe the issue. Done in under 2 minutes.'),
+        ('2','bi-people','Community Upvotes','Neighbours upvote the same issue to signal urgency to officials.'),
+        ('3','bi-check2-circle','Track & Confirm','Follow status updates by email. Confirm resolution or dispute it.'),
+      ] %}
+      {% for num, icon, title, desc in steps %}
+      <div class="col-md-4">
+        <div class="feature-card text-center">
+          <div class="feature-icon mx-auto" style="background:var(--mint)">
+            <i class="bi {{ icon }}" style="color:var(--teal-deep)"></i>
+          </div>
+          <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+            <div class="step-num">{{ num }}</div>
+            <h5 class="mb-0 fw-700">{{ title }}</h5>
+          </div>
+          <p class="mb-0 small" style="color:var(--text-mid)">{{ desc }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="py-5" style="background:var(--mint)">
+  <div class="container">
+    <div class="text-center mb-5">
+      <h2 class="page-title">Built for Real Impact</h2>
+    </div>
+    <div class="row g-3">
+      {% set features = [
+        ('bi-geo-alt-fill','var(--teal-deep)','Interactive Map','Pin your exact location. Pincode lookup auto-fills the area.'),
+        ('bi-bell-fill','var(--terra)','Email Notifications','Get notified at every step — submission, status change, resolution.'),
+        ('bi-phone-fill','#27ae60','OTP Verification','SMS OTP on registration keeps the platform spam-free.'),
+        ('bi-camera-fill','#e67e22','Photo Proof','Officials upload resolution proof. Citizens confirm or dispute.'),
+        ('bi-shield-check','var(--teal-soft)','Duplicate Detection','System warns you if the same issue is already reported nearby.'),
+        ('bi-bar-chart-fill','#8e44ad','Admin Analytics','Ward-level heatmaps, resolution time tracking, category breakdowns.'),
+      ] %}
+      {% for icon, color, title, desc in features %}
+      <div class="col-md-4 col-sm-6">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:{{ color }}22">
+            <i class="bi {{ icon }}" style="color:{{ color }}"></i>
+          </div>
+          <h6 class="fw-700 mb-1">{{ title }}</h6>
+          <p class="small mb-0" style="color:var(--text-mid)">{{ desc }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="py-5" style="background:var(--teal-deep)">
+  <div class="container text-center text-white">
+    <h2 style="font-family:'Fraunces',serif;font-size:2rem">Your City Needs Your Voice</h2>
+    <p style="opacity:.8;max-width:500px;margin:.75rem auto 1.5rem">Every complaint you file is a step toward a better-maintained city. Start reporting today.</p>
+    <a href="{{ url_for('auth.register') }}" class="btn-primary-ca text-decoration-none" style="background:#fff;color:var(--teal-deep);font-size:1rem;padding:.75rem 2.5rem">
+      <i class="bi bi-arrow-right-circle"></i> Register Now — It's Free
+    </a>
+  </div>
+</section>
+{% endblock %}

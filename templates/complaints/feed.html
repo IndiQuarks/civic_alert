@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Community Feed{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="mb-4">
+    <h2 class="page-title mb-1"><i class="bi bi-broadcast me-2" style="color:var(--teal-deep)"></i>Community Feed</h2>
+    <p class="page-sub">Issues reported in your area. Upvote to signal urgency to officials.</p>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-3 mb-4">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Ward</label>
+        <input type="text" name="ward" class="form-control" value="{{ ward_filter }}" placeholder="Filter by ward">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Category</label>
+        <select name="category" class="form-select">
+          <option value="">All Categories</option>
+          {% for cat in categories %}
+          <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select">
+          <option value="">All Statuses</option>
+          {% for s in ['pending','acknowledged','in_progress','resolved','rejected'] %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn-primary-ca w-100 justify-content-center">
+          <i class="bi bi-funnel"></i> Filter
+        </button>
+      </div>
+    </form>
+  </div> 
+  {% if complaints.items %}
+  <div class="row g-3">
+    {% for c in complaints.items %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 priority-{{ c.priority }}" style="display:flex;flex-direction:column">
+
+        {% if c.image_filename %}
+        <img src="{{ url_for('static', filename='uploads/' + c.image_filename) }}"
+             class="card-img-top" style="height:160px;object-fit:cover;border-radius:14px 14px 0 0" alt="">
+        {% endif %}
+
+        <div class="card-body d-flex flex-column" style="gap:.5rem">
+          <!-- Category + Status -->
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="badge-ca" style="font-size:.75rem">{{ c.category.split('/')[0].strip() }}</span>
+            <span class="status-pill sp-{{ c.status }}">{{ c.status.replace('_',' ') }}</span>
+          </div>
+
+          <!-- Title -->
+          <h6 class="fw-bold mb-0" style="color:var(--text-dark)">{{ c.title }}</h6>
+
+          <!-- Address -->
+          <p class="small mb-0" style="color:var(--text-light)">
+            <i class="bi bi-geo-alt me-1"></i>{{ c.address[:65] }}{% if c.address|length > 65 %}…{% endif %}
+          </p>
+
+          <!-- Description -->
+          <p class="small mb-0" style="color:var(--text-mid);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+            {{ c.description }}
+          </p>
+
+          <!-- Footer row: date + priority + upvote button -->
+          <div class="d-flex justify-content-between align-items-center mt-auto pt-2" style="border-top:1px solid var(--border)">
+            <small style="color:var(--text-light)">{{ c.created_at.strftime('%d %b %Y') }}</small>
+
+            <div class="d-flex gap-2 align-items-center">
+              <!-- Priority badge -->
+              <span class="status-pill" style="
+                background:{% if c.priority=='urgent' %}#fde8e8;color:#c0392b
+                {% elif c.priority=='high' %}#fdf0e8;color:var(--terra)
+                {% elif c.priority=='medium' %}#ddf0ee;color:var(--teal-deep)
+                {% else %}#e8f5ee;color:#27ae60{% endif %}">
+                {{ c.priority }}
+              </span>
+
+              <!-- Upvote button -->
+              {% if c.user_id != current_user.id %}
+              <form method="POST" action="{{ url_for('complaints.upvote', complaint_id=c.id) }}" style="margin:0">
+                <button type="submit"
+                        style="display:inline-flex;align-items:center;gap:.3rem;background:var(--mint);color:var(--teal-deep);border:1.5px solid var(--border);border-radius:20px;padding:.25rem .75rem;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .2s"
+                        onmouseover="this.style.background='var(--teal-deep)';this.style.color='#fff'"
+                        onmouseout="this.style.background='var(--mint)';this.style.color='var(--teal-deep)'">
+                  <i class="bi bi-hand-thumbs-up-fill"></i> {{ c.upvotes }}
+                </button>
+              </form>
+              {% else %}
+              <!-- Own complaint: show count only -->
+              <span style="display:inline-flex;align-items:center;gap:.3rem;background:#f4f4f4;color:var(--text-light);border:1.5px solid var(--border);border-radius:20px;padding:.25rem .75rem;font-size:.8rem;font-weight:700">
+                <i class="bi bi-hand-thumbs-up"></i> {{ c.upvotes }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if complaints.pages > 1 %}
+  <nav class="mt-4 d-flex justify-content-center" aria-label="Feed pagination">
+    <ul class="pagination">
+      <li class="page-item {% if not complaints.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('complaints.feed', page=complaints.prev_num, ward=ward_filter, category=category_filter, status=status_filter) }}">
+          &laquo; Prev
+        </a>
+      </li>
+      {% for p in complaints.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+          <li class="page-item {% if p == complaints.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('complaints.feed', page=p, ward=ward_filter, category=category_filter, status=status_filter) }}">{{ p }}</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item {% if not complaints.has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('complaints.feed', page=complaints.next_num, ward=ward_filter, category=category_filter, status=status_filter) }}">
+          Next &raquo;
+        </a>
+      </li>
+    </ul>
+  </nav>
+  <p class="text-center small" style="color:var(--text-light)">
+    Showing {{ complaints.items|length }} of {{ complaints.total }} complaints
+  </p>
+  {% endif %}
+
+  {% else %}
+  <div class="card text-center py-5">
+    <i class="bi bi-search fs-1" style="color:var(--teal-soft)"></i>
+    <p class="mt-3" style="color:var(--text-mid)">No complaints found matching your filters.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
